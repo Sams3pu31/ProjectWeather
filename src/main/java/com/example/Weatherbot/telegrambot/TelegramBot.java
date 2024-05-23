@@ -17,6 +17,8 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public final class TelegramBot extends TelegramLongPollingBot {
@@ -46,9 +48,12 @@ public final class TelegramBot extends TelegramLongPollingBot {
             Message message = update.getMessage();
             long chatId = message.getChatId();
 
+            // Логируем текст сообщения для отладки
+            System.out.println("Получено сообщение: " + message.getText());
+
             // Проверка на наличие текста в сообщении и упоминание бота
             if (message.hasText()) {
-                String messageText = message.getText();
+                String messageText = message.getText().trim();
                 boolean isMentioned = false;
 
                 // Проверяем, упомянут ли бот в сообщении (если сообщение из группы)
@@ -58,11 +63,15 @@ public final class TelegramBot extends TelegramLongPollingBot {
                         for (MessageEntity entity : entities) {
                             if (entity.getType().equals("mention") && messageText.substring(entity.getOffset(), entity.getLength()).equalsIgnoreCase("@" + getBotUsername())) {
                                 isMentioned = true;
+                                messageText = messageText.replace("@" + getBotUsername(), "").trim(); // Убираем упоминание из текста
                                 break;
                             }
                         }
                     }
                 }
+
+                // Убираем вводные фразы
+                messageText = cleanInput(messageText);
 
                 // Обработка команд и сообщений
                 if (messageText.equals("/start") && !message.isGroupMessage()) {
@@ -75,8 +84,8 @@ public final class TelegramBot extends TelegramLongPollingBot {
                     } else if (messageText.contains(",")) {
                         try {
                             String[] numbers = messageText.split(",");
-                            float latitude = Float.parseFloat(numbers[0]);
-                            float longitude = Float.parseFloat(numbers[1]);
+                            float latitude = Float.parseFloat(numbers[0].trim());
+                            float longitude = Float.parseFloat(numbers[1].trim());
                             String weather = weatherClient.getWeather(latitude, longitude);
                             sendMessage(chatId, weather);
                         } catch (NumberFormatException e) {
@@ -139,5 +148,15 @@ public final class TelegramBot extends TelegramLongPollingBot {
         } catch (TelegramApiException e) {
             e.printStackTrace();
         }
+    }
+
+    private String cleanInput(String input) {
+        // Убираем вводные фразы
+        input = input.replaceAll("(?i)какая погода в городе", "").trim();
+
+        // Убираем все кроме букв, пробелов и запятых
+        input = input.replaceAll("[^a-zA-Zа-яА-Я0-9,\\s]", "").trim();
+
+        return input;
     }
 }

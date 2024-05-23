@@ -8,10 +8,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+
 @Service
 public class GeoLocatorServiceImpl {
     // Ключ API для доступа к OpenWeatherMap.
-    private final String apiKey = "033694b0bd5207aeaa89dff0d262efa2";
+    private final String apiKey = "033694b0bd5207aeaa89dff0d262efa2"; // ваш ключ API
 
     // RestTemplate используется для выполнения HTTP-запросов.
     private final RestTemplate restTemplate = new RestTemplate();
@@ -26,15 +27,23 @@ public class GeoLocatorServiceImpl {
         try {
             // Выполняем GET-запрос к API и получаем ответ.
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, null, String.class);
-            // Парсим ответ и возвращаем координаты.
-            return parseCoordinates(response.getBody());
+            System.out.println("Ответ от API геокодирования: " + response.getBody()); // Логируем ответ API
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                // Парсим ответ и возвращаем координаты.
+                return parseCoordinates(response.getBody());
+            } else {
+                throw new RuntimeException("Не удалось получить координаты: " + response.getStatusCode() + " " + response.getBody());
+            }
         } catch (HttpClientErrorException e) {
             // Обработка ошибки, если ключ API недействителен.
             if (e.getStatusCode() == HttpStatus.UNAUTHORIZED) {
-                throw new RuntimeException("Неверный ключ АПИ");
+                throw new RuntimeException("Invalid API key for OpenWeatherMap Geocoding API");
             } else {
-                throw e;
+                throw new RuntimeException("HTTP ошибка при попытке получить координаты: " + e.getStatusCode() + " " + e.getResponseBodyAsString());
             }
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Произошла ошибка при попытке получить координаты для указанного адреса.");
         }
     }
 
@@ -42,15 +51,19 @@ public class GeoLocatorServiceImpl {
     private float[] parseCoordinates(String response) {
         try {
             // Читаем JSON-ответ и извлекаем координаты.
-            JsonNode rootNode = objectMapper.readTree(response).get(0);
-            float latitude = rootNode.path("lat").floatValue();
-            float longitude = rootNode.path("lon").floatValue();
+            JsonNode rootNode = objectMapper.readTree(response);
+            System.out.println("JSON-ответ: " + rootNode.toString()); // Логируем JSON-ответ
+            if (rootNode == null || rootNode.isEmpty() || !rootNode.isArray() || rootNode.size() == 0) {
+                throw new RuntimeException("Не удалось найти координаты для указанного адреса.");
+            }
+            JsonNode locationNode = rootNode.get(0);
+            float latitude = locationNode.path("lat").floatValue();
+            float longitude = locationNode.path("lon").floatValue();
             // Возвращаем широту и долготу как массив.
             return new float[]{latitude, longitude};
         } catch (Exception e) {
             e.printStackTrace();
-            // Возвращаем null, если что-то пошло не так.
-            return null;
+            throw new RuntimeException("Произошла ошибка при парсинге координат.");
         }
     }
 }
